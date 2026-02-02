@@ -79,11 +79,15 @@ Search across all conversation content by keywords with advanced filtering.
 ## Quick Start
 
 ```bash
-# Install directly via npx (no local installation needed)
-npx claude-code-history-mcp
+# Clone this repository
+git clone https://github.com/ebowwa/claude-code-history-mcp.git
+cd claude-code-history-mcp
 
-# Or install globally
-npm install -g claude-code-history-mcp
+# Install dependencies (uses bun)
+bun install
+
+# Run directly
+bun src/index.ts
 ```
 
 ## Usage with MCP Clients
@@ -94,24 +98,20 @@ Add the following configuration to your MCP client (e.g., Claude Desktop):
 {
   "mcpServers": {
     "claude-code-history": {
-      "command": "npx",
-      "args": ["claude-code-history-mcp"]
+      "command": "bun",
+      "args": ["/path/to/claude-code-history-mcp/src/index.ts"]
     }
   }
 }
 ```
 
-Alternatively, if you have installed the package globally:
+## Development
 
-```json
-{
-  "mcpServers": {
-    "claude-code-history": {
-      "command": "claude-code-history-mcp"
-    }
-  }
-}
-```
+This fork has been converted to use **bun** for runtime execution instead of compiling to JavaScript:
+
+- **Runtime:** `bun` (no build step required)
+- **TypeScript:** Executed directly via bun
+- **Hot reload:** `bun --hot src/index.ts`
 
 ## Recommended Workflow 🚀
 
