@@ -1,51 +1,54 @@
 {
-  "name": "claude-code-history-mcp",
-  "version": "1.1.1",
-  "description": "MCP server for Claude Code conversation history tracking and analysis",
+  "name": "@ebowwa/claudecodehistory",
+  "version": "1.2.2",
+  "description": "TypeScript library for accessing and analyzing Claude Code conversation history",
   "type": "module",
-  "main": "src/index.ts",
-  "bin": {
-    "claude-code-history-mcp": "src/index.ts"
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
   },
   "files": [
-    "src/",
+    "dist/",
+    "example/",
+    "README",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "dev": "bun --hot src/index.ts",
-    "start": "bun src/index.ts",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.0.4",
-    "typescript": "^5.8.3"
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "claude-code",
-    "mcp",
     "history",
     "conversation",
     "ai",
     "typescript",
-    "server",
-    "bun",
-    "tsx"
+    "library",
+    "analytics",
+    "mcp"
   ],
-  "author": "ebowwa",
+  "author": "Ebowwa Labs <labs@ebowwa.com>",
   "license": "MIT",
+  "homepage": "https://github.com/ebowwa/codespaces/tree/main/packages/src/claudecode-history#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ebowwa/claude-code-history-mcp.git"
+    "url": "https://github.com/ebowwa/codespaces.git",
+    "directory": "packages/src/claudecode-history"
   },
-  "homepage": "https://github.com/ebowwa/claude-code-history-mcp#readme",
   "bugs": {
-    "url": "https://github.com/ebowwa/claude-code-history-mcp/issues"
+    "url": "https://github.com/ebowwa/codespaces/issues"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.4",
+    "typescript": "^5.8.3"
   }
 }

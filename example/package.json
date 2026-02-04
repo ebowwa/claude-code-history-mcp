@@ -1,0 +1,37 @@
+{
+  "name": "claude-code-history-mcp-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "claude-code-history-mcp": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ebowwa/claudecodehistory": "file:..",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.4",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "claude-code",
+    "mcp",
+    "history",
+    "conversation",
+    "example",
+    "typescript",
+    "bun"
+  ],
+  "author": "ebowwa",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

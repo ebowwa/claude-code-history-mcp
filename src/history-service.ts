@@ -101,8 +101,8 @@ export interface SearchOptions {
 export class ClaudeCodeHistoryService {
   private claudeDir: string;
 
-  constructor() {
-    this.claudeDir = path.join(os.homedir(), '.claude');
+  constructor(claudeDir?: string) {
+    this.claudeDir = claudeDir || path.join(os.homedir(), '.claude');
   }
 
   /**
