@@ -627,7 +627,7 @@ var ClaudeCodeHistoryService = /** @class */ (function () {
      */
     ClaudeCodeHistoryService.prototype.getCurrentSession = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var historyPath, lastLine, entry, error_6;
+            var historyPath, lastLine, entry, timestamp, date, error_6;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -640,9 +640,23 @@ var ClaudeCodeHistoryService = /** @class */ (function () {
                             return [2 /*return*/, null];
                         }
                         entry = JSON.parse(lastLine);
+                        timestamp = void 0;
+                        if (typeof entry.timestamp === 'number') {
+                            timestamp = new Date(entry.timestamp).toISOString();
+                        }
+                        else if (typeof entry.timestamp === 'string') {
+                            date = new Date(entry.timestamp);
+                            if (isNaN(date.getTime())) {
+                                return [2 /*return*/, null]; // Invalid date
+                            }
+                            timestamp = date.toISOString();
+                        }
+                        else {
+                            return [2 /*return*/, null];
+                        }
                         return [2 /*return*/, {
                                 sessionId: entry.sessionId,
-                                timestamp: new Date(entry.timestamp).toISOString(),
+                                timestamp: timestamp,
                                 projectPath: entry.project,
                                 display: entry.display
                             }];
