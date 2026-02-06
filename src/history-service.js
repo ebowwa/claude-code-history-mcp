@@ -49,6 +49,9 @@ var path = require("path");
 var os = require("os");
 var fs_1 = require("fs");
 var readline_1 = require("readline");
+var child_process_1 = require("child_process");
+var util_1 = require("util");
+var execAsync = (0, util_1.promisify)(child_process_1.exec);
 var ClaudeCodeHistoryService = /** @class */ (function () {
     function ClaudeCodeHistoryService(claudeDir) {
         this.claudeDir = claudeDir || path.join(os.homedir(), '.claude');
@@ -616,6 +619,229 @@ var ClaudeCodeHistoryService = /** @class */ (function () {
                         return [2 /*return*/, false]; // Safe fallback: read the file if stat fails
                     case 4: return [2 /*return*/];
                 }
+            });
+        });
+    };
+    /**
+     * Gets the current active Claude Code session by reading the last line from history.jsonl
+     */
+    ClaudeCodeHistoryService.prototype.getCurrentSession = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var historyPath, lastLine, entry, error_6;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 2, , 3]);
+                        historyPath = path.join(this.claudeDir, 'history.jsonl');
+                        return [4 /*yield*/, this.readLastLineFromFile(historyPath)];
+                    case 1:
+                        lastLine = _a.sent();
+                        if (!lastLine) {
+                            return [2 /*return*/, null];
+                        }
+                        entry = JSON.parse(lastLine);
+                        return [2 /*return*/, {
+                                sessionId: entry.sessionId,
+                                timestamp: new Date(entry.timestamp).toISOString(),
+                                projectPath: entry.project,
+                                display: entry.display
+                            }];
+                    case 2:
+                        error_6 = _a.sent();
+                        console.error('Error getting current session:', error_6);
+                        return [2 /*return*/, null];
+                    case 3: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Maps a process ID to a Claude Code session by examining the process tree
+     */
+    ClaudeCodeHistoryService.prototype.getSessionByPid = function (pid) {
+        return __awaiter(this, void 0, void 0, function () {
+            var stdout, lines, parts, processPid, parentPid, command, sessionId, isAlive, error_7;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 4, , 5]);
+                        return [4 /*yield*/, execAsync("ps -p ".concat(pid, " -o pid,ppid,command"))];
+                    case 1:
+                        stdout = (_a.sent()).stdout;
+                        lines = stdout.trim().split('\n');
+                        if (lines.length < 2) {
+                            return [2 /*return*/, null];
+                        }
+                        parts = lines[1].trim().split(/\s+/);
+                        processPid = parseInt(parts[0], 10);
+                        parentPid = parseInt(parts[1], 10);
+                        command = parts.slice(2).join(' ');
+                        // Check if this is a Claude Code process
+                        if (!command.toLowerCase().includes('claude')) {
+                            return [2 /*return*/, null];
+                        }
+                        return [4 /*yield*/, this.extractSessionIdFromProcess(processPid)];
+                    case 2:
+                        sessionId = _a.sent();
+                        return [4 /*yield*/, this.isProcessAlive(processPid)];
+                    case 3:
+                        isAlive = _a.sent();
+                        return [2 /*return*/, {
+                                sessionId: sessionId,
+                                pid: processPid,
+                                command: command,
+                                alive: isAlive
+                            }];
+                    case 4:
+                        error_7 = _a.sent();
+                        console.error("Error getting session by PID ".concat(pid, ":"), error_7);
+                        return [2 /*return*/, null];
+                    case 5: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Lists all session UUIDs from the session-env directory
+     */
+    ClaudeCodeHistoryService.prototype.listAllSessionUuids = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var sessionEnvDir, entries, uuids, error_8;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 2, , 3]);
+                        sessionEnvDir = path.join(this.claudeDir, 'session-env');
+                        return [4 /*yield*/, fs.readdir(sessionEnvDir)];
+                    case 1:
+                        entries = _a.sent();
+                        uuids = entries.filter(function (entry) {
+                            // UUID v4 pattern: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+                            var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                            return uuidPattern.test(entry);
+                        });
+                        return [2 /*return*/, uuids];
+                    case 2:
+                        error_8 = _a.sent();
+                        console.error('Error listing session UUIDs:', error_8);
+                        return [2 /*return*/, []];
+                    case 3: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Reads only the last line from a file efficiently
+     */
+    ClaudeCodeHistoryService.prototype.readLastLineFromFile = function (filePath) {
+        return __awaiter(this, void 0, void 0, function () {
+            var fileStream, rl, lastLine, _a, rl_2, rl_2_1, line, e_2_1, error_9;
+            var _b, e_2, _c, _d;
+            return __generator(this, function (_e) {
+                switch (_e.label) {
+                    case 0:
+                        _e.trys.push([0, 13, , 14]);
+                        fileStream = (0, fs_1.createReadStream)(filePath, { encoding: 'utf-8' });
+                        rl = (0, readline_1.createInterface)({
+                            input: fileStream,
+                            crlfDelay: Infinity
+                        });
+                        lastLine = null;
+                        _e.label = 1;
+                    case 1:
+                        _e.trys.push([1, 6, 7, 12]);
+                        _a = true, rl_2 = __asyncValues(rl);
+                        _e.label = 2;
+                    case 2: return [4 /*yield*/, rl_2.next()];
+                    case 3:
+                        if (!(rl_2_1 = _e.sent(), _b = rl_2_1.done, !_b)) return [3 /*break*/, 5];
+                        _d = rl_2_1.value;
+                        _a = false;
+                        line = _d;
+                        if (line.trim()) {
+                            lastLine = line;
+                        }
+                        _e.label = 4;
+                    case 4:
+                        _a = true;
+                        return [3 /*break*/, 2];
+                    case 5: return [3 /*break*/, 12];
+                    case 6:
+                        e_2_1 = _e.sent();
+                        e_2 = { error: e_2_1 };
+                        return [3 /*break*/, 12];
+                    case 7:
+                        _e.trys.push([7, , 10, 11]);
+                        if (!(!_a && !_b && (_c = rl_2.return))) return [3 /*break*/, 9];
+                        return [4 /*yield*/, _c.call(rl_2)];
+                    case 8:
+                        _e.sent();
+                        _e.label = 9;
+                    case 9: return [3 /*break*/, 11];
+                    case 10:
+                        if (e_2) throw e_2.error;
+                        return [7 /*endfinally*/];
+                    case 11: return [7 /*endfinally*/];
+                    case 12: return [2 /*return*/, lastLine];
+                    case 13:
+                        error_9 = _e.sent();
+                        console.error('Error reading last line from file:', error_9);
+                        return [2 /*return*/, null];
+                    case 14: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Extracts session ID from a Claude Code process by examining command and environment
+     */
+    ClaudeCodeHistoryService.prototype.extractSessionIdFromProcess = function (pid) {
+        return __awaiter(this, void 0, void 0, function () {
+            var psOutput, command, sessionMatch, currentSession, error_10;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 3, , 4]);
+                        return [4 /*yield*/, execAsync("ps -p ".concat(pid, " -o command"))];
+                    case 1:
+                        psOutput = (_a.sent()).stdout;
+                        command = psOutput.trim();
+                        sessionMatch = command.match(/-r\s+([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
+                        if (sessionMatch) {
+                            return [2 /*return*/, sessionMatch[1]];
+                        }
+                        return [4 /*yield*/, this.getCurrentSession()];
+                    case 2:
+                        currentSession = _a.sent();
+                        if (currentSession) {
+                            return [2 /*return*/, currentSession.sessionId];
+                        }
+                        // Fallback: return empty string
+                        return [2 /*return*/, ''];
+                    case 3:
+                        error_10 = _a.sent();
+                        console.error('Error extracting session ID from process:', error_10);
+                        return [2 /*return*/, ''];
+                    case 4: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Checks if a process is still alive
+     */
+    ClaudeCodeHistoryService.prototype.isProcessAlive = function (pid) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                try {
+                    // Send signal 0 to check if process exists
+                    process.kill(pid, 0);
+                    return [2 /*return*/, true];
+                }
+                catch (error) {
+                    return [2 /*return*/, false];
+                }
+                return [2 /*return*/];
             });
         });
     };
