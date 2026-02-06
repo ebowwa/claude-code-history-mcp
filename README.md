@@ -138,6 +138,55 @@ const sessions = await service.listSessions({
 
 Returns: `SessionInfo[]`
 
+##### `getCurrentSession()`
+
+Get information about the currently active Claude Code session.
+
+```typescript
+const currentSession = await service.getCurrentSession();
+```
+
+Returns: `CurrentSessionInfo | null`
+
+**Notes:**
+- Returns `null` if no active session is found
+- Uses a best-effort approach to detect the current session by checking running processes and recently modified session files
+- The detected session may not always be the actual active session if multiple Claude Code instances are running
+
+##### `getSessionByPid(pid)`
+
+Get session information by process ID.
+
+```typescript
+const sessionInfo = await service.getSessionByPid(12345);
+```
+
+**Parameters:**
+- `pid` (number) - Process ID of the Claude Code session
+
+Returns: `SessionProcessInfo | null`
+
+**Notes:**
+- Returns `null` if no session is found for the given PID
+- Cross-references running processes with session history files
+- Useful for correlating active Claude Code processes with their conversation history
+
+##### `listAllSessionUuids()`
+
+List all session UUIDs across all projects.
+
+```typescript
+const uuids = await service.listAllSessionUuids();
+// Returns: ["uuid-1", "uuid-2", "uuid-3", ...]
+```
+
+Returns: `string[]`
+
+**Notes:**
+- Returns a flat array of all session UUIDs
+- Useful for bulk operations or generating session inventories
+- Does not include project path information - use `listSessions()` for detailed session metadata
+
 ## Types
 
 ```typescript
@@ -188,6 +237,22 @@ interface SessionInfo {
   messageCount: number;
   userMessageCount: number;
   assistantMessageCount: number;
+}
+
+interface CurrentSessionInfo {
+  uuid: string;
+  projectPath: string;
+  pid?: number;
+  command?: string;
+}
+
+interface SessionProcessInfo {
+  uuid: string;
+  projectPath: string;
+  pid: number;
+  command: string;
+  startTime?: string;
+  messageCount?: number;
 }
 ```
 

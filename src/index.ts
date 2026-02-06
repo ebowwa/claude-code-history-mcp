@@ -8,4 +8,6 @@ export type {
   ProjectInfo,
   SessionInfo,
   SearchOptions,
+  CurrentSessionInfo,
+  SessionProcessInfo,
 } from './history-service.js';
