@@ -3,6 +3,10 @@ import * as path from 'path';
 import * as os from 'os';
 import { createReadStream } from 'fs';
 import { createInterface } from 'readline';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export interface ClaudeCodeMessage {
   parentUuid: string | null;
@@ -96,6 +100,20 @@ export interface SearchOptions {
   startDate?: string;
   endDate?: string;
   timezone?: string;
+}
+
+export interface CurrentSessionInfo {
+  sessionId: string;
+  timestamp: string;
+  projectPath?: string;
+  display?: string;
+}
+
+export interface SessionProcessInfo {
+  sessionId: string;
+  pid: number;
+  command: string;
+  alive: boolean;
 }
 
 export class ClaudeCodeHistoryService {
@@ -569,6 +587,178 @@ export class ClaudeCodeHistoryService {
     } catch (error) {
       console.warn(`Failed to get file stats for ${filePath}:`, error);
       return false; // Safe fallback: read the file if stat fails
+    }
+  }
+
+  /**
+   * Gets the current active Claude Code session by reading the last line from history.jsonl
+   */
+  async getCurrentSession(): Promise<CurrentSessionInfo | null> {
+    try {
+      const historyPath = path.join(this.claudeDir, 'history.jsonl');
+      const lastLine = await this.readLastLineFromFile(historyPath);
+
+      if (!lastLine) {
+        return null;
+      }
+
+      const entry = JSON.parse(lastLine);
+
+      // Validate and parse timestamp
+      let timestamp: string;
+      if (typeof entry.timestamp === 'number') {
+        timestamp = new Date(entry.timestamp).toISOString();
+      } else if (typeof entry.timestamp === 'string') {
+        const date = new Date(entry.timestamp);
+        if (isNaN(date.getTime())) {
+          return null; // Invalid date
+        }
+        timestamp = date.toISOString();
+      } else {
+        return null;
+      }
+
+      return {
+        sessionId: entry.sessionId,
+        timestamp,
+        projectPath: entry.project,
+        display: entry.display
+      };
+    } catch (error) {
+      console.error('Error getting current session:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Maps a process ID to a Claude Code session by examining the process tree
+   */
+  async getSessionByPid(pid: number): Promise<SessionProcessInfo | null> {
+    try {
+      // Get process info including parent PID and command
+      const { stdout } = await execAsync(`ps -p ${pid} -o pid,ppid,command`);
+      const lines = stdout.trim().split('\n');
+
+      if (lines.length < 2) {
+        return null;
+      }
+
+      // Parse the process line (skip header)
+      const parts = lines[1].trim().split(/\s+/);
+      const processPid = parseInt(parts[0], 10);
+      const parentPid = parseInt(parts[1], 10);
+      const command = parts.slice(2).join(' ');
+
+      // Check if this is a Claude Code process
+      if (!command.toLowerCase().includes('claude')) {
+        return null;
+      }
+
+      // Extract session ID from command arguments or trace process tree
+      let sessionId = await this.extractSessionIdFromProcess(processPid);
+
+      // Check if process is still alive
+      const isAlive = await this.isProcessAlive(processPid);
+
+      return {
+        sessionId,
+        pid: processPid,
+        command,
+        alive: isAlive
+      };
+    } catch (error) {
+      console.error(`Error getting session by PID ${pid}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Lists all session UUIDs from the session-env directory
+   */
+  async listAllSessionUuids(): Promise<string[]> {
+    try {
+      const sessionEnvDir = path.join(this.claudeDir, 'session-env');
+      const entries = await fs.readdir(sessionEnvDir);
+
+      // Filter only UUID-like directory names
+      const uuids = entries.filter(entry => {
+        // UUID v4 pattern: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        return uuidPattern.test(entry);
+      });
+
+      return uuids;
+    } catch (error) {
+      console.error('Error listing session UUIDs:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Reads only the last line from a file efficiently
+   */
+  private async readLastLineFromFile(filePath: string): Promise<string | null> {
+    try {
+      const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
+      const rl = createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+      });
+
+      let lastLine: string | null = null;
+
+      for await (const line of rl) {
+        if (line.trim()) {
+          lastLine = line;
+        }
+      }
+
+      return lastLine;
+    } catch (error) {
+      console.error('Error reading last line from file:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Extracts session ID from a Claude Code process by examining command and environment
+   */
+  private async extractSessionIdFromProcess(pid: number): Promise<string> {
+    try {
+      // First, check if the command contains a session ID argument (-r flag)
+      const { stdout: psOutput } = await execAsync(`ps -p ${pid} -o command`);
+      const command = psOutput.trim();
+
+      // Look for -r flag with session ID
+      const sessionMatch = command.match(/-r\s+([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
+      if (sessionMatch) {
+        return sessionMatch[1];
+      }
+
+      // If not found in command, check the current session from history
+      const currentSession = await this.getCurrentSession();
+      if (currentSession) {
+        return currentSession.sessionId;
+      }
+
+      // Fallback: return empty string
+      return '';
+    } catch (error) {
+      console.error('Error extracting session ID from process:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Checks if a process is still alive
+   */
+  private async isProcessAlive(pid: number): Promise<boolean> {
+    try {
+      // Send signal 0 to check if process exists
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 }
