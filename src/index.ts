@@ -10,4 +10,6 @@ export type {
   SearchOptions,
   CurrentSessionInfo,
   SessionProcessInfo,
+  RecentActivityOptions,
+  RecentActivityItem,
 } from './history-service.js';

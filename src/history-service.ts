@@ -92,6 +92,16 @@ export interface SessionInfo {
   messageCount: number;
   userMessageCount: number;
   assistantMessageCount: number;
+  /** First user message preview (truncated to ~100 chars) */
+  firstUserMessage?: string;
+  /** Duration in milliseconds */
+  durationMs?: number;
+  /** Human-readable duration (e.g., "5m 30s") */
+  durationFormatted?: string;
+  /** Session status indicators */
+  hasErrors?: boolean;
+  /** Project name extracted from path (basename) */
+  projectName?: string;
 }
 
 export interface SearchOptions {
@@ -114,6 +124,24 @@ export interface SessionProcessInfo {
   pid: number;
   command: string;
   alive: boolean;
+}
+
+export interface RecentActivityOptions {
+  limit?: number;
+  includeSummaries?: boolean;
+}
+
+export interface RecentActivityItem {
+  sessionId: string;
+  projectPath: string;
+  projectName: string;
+  timestamp: string;
+  /** First user message - what was asked */
+  asked: string;
+  /** Brief summary from assistant messages - what was done */
+  done?: string;
+  /** Human-readable relative time */
+  timeAgo: string;
 }
 
 export class ClaudeCodeHistoryService {
@@ -379,15 +407,39 @@ export class ClaudeCodeHistoryService {
               
               const userMessageCount = entries.filter(e => e.type === 'user').length;
               const assistantMessageCount = entries.filter(e => e.type === 'assistant').length;
-              
+
+              // Calculate duration
+              const startTime = new Date(sessionStart).getTime();
+              const endTime = new Date(sessionEnd).getTime();
+              const durationMs = endTime - startTime;
+
+              // Find first user message for preview
+              const firstUserEntry = entries.slice().reverse().find(e => e.type === 'user');
+              const firstUserMessage = firstUserEntry
+                ? (firstUserEntry.content.length > 100
+                    ? firstUserEntry.content.slice(0, 100) + '...'
+                    : firstUserEntry.content)
+                : undefined;
+
+              // Check for errors
+              const hasErrors = entries.some(e => e.metadata?.isError === true);
+
+              // Extract project name from path
+              const projectName = decodedPath.split('/').pop() || decodedPath;
+
               sessions.push({
                 sessionId,
                 projectPath: decodedPath,
+                projectName,
                 startTime: sessionStart,
                 endTime: sessionEnd,
                 messageCount: entries.length,
                 userMessageCount,
-                assistantMessageCount
+                assistantMessageCount,
+                firstUserMessage,
+                durationMs,
+                durationFormatted: this.formatDuration(durationMs),
+                hasErrors
               });
             }
           }
@@ -400,6 +452,73 @@ export class ClaudeCodeHistoryService {
     // Sort by start time (newest first)
     sessions.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
     return sessions;
+  }
+
+  /**
+   * Get recent activity across all projects
+   * Returns what was asked, what was done, and when for the most recent sessions
+   */
+  async getRecentActivity(options: RecentActivityOptions = {}): Promise<RecentActivityItem[]> {
+    const { limit = 10, includeSummaries = true } = options;
+
+    // Get all sessions (sorted by start time, newest first)
+    const allSessions = await this.listSessions();
+
+    // Take the most recent N sessions
+    const recentSessions = allSessions.slice(0, limit);
+
+    // Build activity items with summaries
+    const activities: RecentActivityItem[] = [];
+
+    for (const session of recentSessions) {
+      const activity: RecentActivityItem = {
+        sessionId: session.sessionId,
+        projectPath: session.projectPath,
+        projectName: session.projectName || session.projectPath.split('/').pop() || session.projectPath,
+        timestamp: session.startTime,
+        timeAgo: this.getTimeAgo(new Date(session.startTime)),
+        asked: session.firstUserMessage || 'No user message found',
+      };
+
+      // Generate summary from assistant messages if requested
+      if (includeSummaries) {
+        activity.done = await this.generateSessionSummary(session.sessionId);
+      }
+
+      activities.push(activity);
+    }
+
+    return activities;
+  }
+
+  /**
+   * Generate a brief summary of what was done in a session from assistant messages
+   */
+  private async generateSessionSummary(sessionId: string): Promise<string | undefined> {
+    try {
+      const result = await this.getConversationHistory({
+        sessionId,
+        limit: 50, // Get first 50 messages for summary
+        messageTypes: ['assistant'],
+      });
+
+      if (result.entries.length === 0) {
+        return undefined;
+      }
+
+      // Extract the first meaningful assistant response
+      const firstAssistant = result.entries[result.entries.length - 1];
+      if (!firstAssistant || !firstAssistant.content) {
+        return undefined;
+      }
+
+      // Truncate summary to ~150 characters
+      const content = firstAssistant.content;
+      return content.length > 150 ? content.slice(0, 150) + '...' : content;
+    } catch (error) {
+      console.error(`Error generating summary for session ${sessionId}:`, error);
+      return undefined;
+    }
   }
 
   private async loadClaudeHistoryEntries(options: { startDate?: string; endDate?: string } = {}): Promise<ConversationEntry[]> {
@@ -549,6 +668,28 @@ export class ClaudeCodeHistoryService {
     if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
     if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
     return `${Math.floor(diffDays / 365)}y ago`;
+  }
+
+  /**
+   * Format duration in milliseconds to human-readable string
+   */
+  private formatDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    if (minutes < 60) {
+      return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (hours < 24) {
+      return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+    }
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
   }
 
   private decodeProjectPath(projectDir: string): string {
