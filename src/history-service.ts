@@ -193,15 +193,10 @@ export class ClaudeCodeHistoryService {
       // Adjust local time to get UTC equivalent
       const utcResult = new Date(localTime.getTime() + offsetMs - tzOffsetMs);
       
-      const result = utcResult.toISOString();
-      console.log(`normalizeDate: ${dateString} (${isEndDate ? 'end' : 'start'}) in ${tz} -> ${result}`);
-      
-      return result;
-    } catch (error) {
-      console.warn(`Failed to process timezone ${tz}, falling back to simple conversion:`, error);
-      const fallback = `${dateString}T${isEndDate ? '23:59:59.999' : '00:00:00.000'}Z`;
-      console.log(`normalizeDate fallback: ${dateString} -> ${fallback}`);
-      return fallback;
+      return utcResult.toISOString();
+    } catch {
+      // Fallback to simple conversion
+      return `${dateString}T${isEndDate ? '23:59:59.999' : '00:00:00.000'}Z`;
     }
   }
 

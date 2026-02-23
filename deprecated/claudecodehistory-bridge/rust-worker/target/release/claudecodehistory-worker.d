@@ -1,0 +1,1 @@
+/Users/ebowwa/Desktop/codespaces/packages/src/claudecodehistory-bridge/rust-worker/target/release/claudecodehistory-worker: /Users/ebowwa/Desktop/codespaces/packages/src/claudecodehistory-bridge/rust-worker/src/main.rs

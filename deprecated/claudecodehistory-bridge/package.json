@@ -1,0 +1,47 @@
+{
+  "name": "@ebowwa/claudecodehistory-bridge",
+  "version": "0.1.0",
+  "description": "High-performance Claude Code history parser using stdin/stdout bridge",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "rust-worker", "src", "types"],
+  "scripts": {
+    "build": "bun run build:rust && bun run build:ts",
+    "build:rust": "cd rust-worker && cargo build --release",
+    "build:ts": "bun build ./src/index.ts --outdir ./dist --target=bun && tsc --emitDeclarationOnly --declaration --outDir ./dist",
+    "test": "bun test",
+    "clean": "rm -rf dist rust-worker/target"
+  },
+  "keywords": ["claude-code", "history", "parser", "rust", "stdio", "json-rpc"],
+  "author": "ebowwa",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ebowwa/codespaces",
+    "directory": "packages/src/claudecodehistory-bridge"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "dependencies": {
+    "@ebowwa/rust-bridge": "^0.1.0",
+    "@msgpack/msgpack": "^3.1.3"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.9",
+    "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

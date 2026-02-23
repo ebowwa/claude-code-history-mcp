@@ -21,6 +21,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "bun test tests/",
+    "benchmark": "bun run benchmark-full.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -50,8 +52,5 @@
   "devDependencies": {
     "@types/node": "^24.0.4",
     "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "@ebowwa/claudecodehistory": "^1.2.4"
   }
 }
