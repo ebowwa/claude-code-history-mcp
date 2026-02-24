@@ -52,5 +52,12 @@
   "devDependencies": {
     "@types/node": "^24.0.4",
     "typescript": "^5.8.3"
+  },
+  "ownership": {
+    "domain": "ai",
+    "responsibilities": [
+      "claude-history",
+      "conversation-tracking"
+    ]
   }
 }
