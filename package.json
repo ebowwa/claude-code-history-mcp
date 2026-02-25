@@ -1,6 +1,6 @@
 {
   "name": "@ebowwa/claudecodehistory",
-  "version": "1.2.3",
+  "version": "1.5.0",
   "description": "TypeScript library for accessing and analyzing Claude Code conversation history",
   "type": "module",
   "main": "./dist/index.js",
@@ -46,6 +46,9 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@ebowwa/jsonl-hft": "^0.1.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.4",

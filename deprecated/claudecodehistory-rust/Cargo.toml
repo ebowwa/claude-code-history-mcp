@@ -1,0 +1,28 @@
+[package]
+name = "claudecodehistory-rust"
+version = "0.1.0"
+edition = "2021"
+authors = ["ebowwa"]
+description = "High-performance Claude Code history parser with FFI bindings for Bun"
+license = "MIT"
+repository = "https://github.com/ebowwa/codespaces"
+
+[lib]
+name = "claudecodehistory_rust"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+rayon = "1.8"
+memmap2 = "0.9"
+walkdir = "2.4"
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 1
+strip = "none"

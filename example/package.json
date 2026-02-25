@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-history-mcp-example",
+  "name": "@ebowwa/claude-code-history-example",
   "version": "1.0.0",
   "private": true,
   "type": "module",

@@ -102,7 +102,10 @@ describe('Session Methods', () => {
     });
 
     it('should return null when history file does not exist', async () => {
-      const result = await service.getCurrentSession();
+      // Use a fresh service with a non-existent directory
+      const nonExistentDir = path.join(tempDir, 'non-existent');
+      const freshService = new ClaudeCodeHistoryService(nonExistentDir);
+      const result = await freshService.getCurrentSession();
 
       expect(result).toBeNull();
     });
@@ -227,22 +230,26 @@ describe('Session Methods', () => {
     });
 
     it('should only include directories (not files)', async () => {
-      const sessionEnvDir = path.join(claudeDir, 'session-env');
+      // Use a fresh directory to avoid contamination from other tests
+      const freshClaudeDir = path.join(tempDir, 'fresh-session-test-' + Date.now());
+      const freshService = new ClaudeCodeHistoryService(freshClaudeDir);
+      const sessionEnvDir = path.join(freshClaudeDir, 'session-env');
       await mkdir(sessionEnvDir, { recursive: true });
 
-      // Create a valid UUID directory
+      // Create a valid UUID directory (lowercase)
       await mkdir(path.join(sessionEnvDir, '550e8400-e29b-41d4-a716-446655440000'), { recursive: true });
 
       // Create files with UUID-like names
       await writeFile(path.join(sessionEnvDir, '6ba7b810-9dad-11d1-80b4-00c04fd430c8'), 'test');
       await writeFile(path.join(sessionEnvDir, 'readme.txt'), 'readme');
 
-      const result = await service.listAllSessionUuids();
+      const result = await freshService.listAllSessionUuids();
 
       // Should include the directory but not necessarily filter out files
       // (depending on implementation - readdir returns both)
       expect(result.length).toBeGreaterThan(0);
-      expect(result).toContain('550e8400-e29b-41d4-a716-446655440000');
+      // Use case-insensitive comparison since filesystem may return different case
+      expect(result.map((r: string) => r.toLowerCase())).toContain('550e8400-e29b-41d4-a716-446655440000');
     });
 
     it('should handle only partial UUID format', async () => {
