@@ -1,6 +1,6 @@
 {
   "name": "@ebowwa/claudecodehistory",
-  "version": "1.2.4",
+  "version": "1.5.0",
   "description": "TypeScript library for accessing and analyzing Claude Code conversation history",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,8 +21,6 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "bun test tests/",
-    "benchmark": "bun run benchmark-full.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -49,15 +47,11 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "dependencies": {
+    "@ebowwa/jsonl-hft": "^0.1.2"
+  },
   "devDependencies": {
     "@types/node": "^24.0.4",
     "typescript": "^5.8.3"
-  },
-  "ownership": {
-    "domain": "ai",
-    "responsibilities": [
-      "claude-history",
-      "conversation-tracking"
-    ]
   }
 }

@@ -5,8 +5,10 @@ import { createReadStream } from 'fs';
 import { createInterface } from 'readline';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { parseDirFast, type ParsedEntry } from '@ebowwa/jsonl-hft';
 
 const execAsync = promisify(exec);
+const USE_FAST_PARSER = process.env.CLAUDE_HISTORY_FAST_PARSER !== 'false';
 
 export interface ClaudeCodeMessage {
   parentUuid: string | null;
@@ -158,64 +160,68 @@ export class ClaudeCodeHistoryService {
     if (dateString.includes('T')) {
       return dateString;
     }
-    
+
     const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    
+
     try {
       if (tz === 'UTC') {
         const timeStr = isEndDate ? '23:59:59.999' : '00:00:00.000';
         return `${dateString}T${timeStr}Z`;
       }
-      
+
       // Correct approach: Create date in target timezone and convert to UTC
       const [year, month, day] = dateString.split('-').map(Number);
       const hour = isEndDate ? 23 : 0;
       const minute = isEndDate ? 59 : 0;
       const second = isEndDate ? 59 : 0;
       const millisecond = isEndDate ? 999 : 0;
-      
+
       // Create a reference date to calculate offset
       const referenceDate = new Date(year, month - 1, day, 12, 0, 0); // Use noon for stable offset
-      
+
       // Calculate timezone offset for this specific date (handles DST)
       const offsetMs = referenceDate.getTimezoneOffset() * 60000;
-      
+
       // Create the target time in the specified timezone
       const localTime = new Date(year, month - 1, day, hour, minute, second, millisecond);
-      
+
       // Get what this local time would be in the target timezone
       const targetTzTime = new Date(localTime.toLocaleString('en-CA', { timeZone: tz }));
       const utcTime = new Date(localTime.toLocaleString('en-CA', { timeZone: 'UTC' }));
-      
+
       // Calculate the difference between target timezone and UTC
       const tzOffsetMs = targetTzTime.getTime() - utcTime.getTime();
-      
+
       // Adjust local time to get UTC equivalent
       const utcResult = new Date(localTime.getTime() + offsetMs - tzOffsetMs);
-      
-      return utcResult.toISOString();
-    } catch {
-      // Fallback to simple conversion
-      return `${dateString}T${isEndDate ? '23:59:59.999' : '00:00:00.000'}Z`;
+
+      const result = utcResult.toISOString();
+      console.log(`normalizeDate: ${dateString} (${isEndDate ? 'end' : 'start'}) in ${tz} -> ${result}`);
+      return result;
+    } catch (error) {
+      console.warn(`Failed to process timezone ${tz}, falling back to simple conversion:`, error);
+      const fallback = `${dateString}T${isEndDate ? '23:59:59.999' : '00:00:00.000'}Z`;
+      console.log(`normalizeDate fallback: ${dateString} -> ${fallback}`);
+      return fallback;
     }
   }
 
   async getConversationHistory(options: HistoryQueryOptions = {}): Promise<PaginatedConversationResponse> {
     const { sessionId, startDate, endDate, limit = 20, offset = 0, timezone, messageTypes } = options;
-    
+
     // Normalize date strings for proper comparison
     const normalizedStartDate = startDate ? this.normalizeDate(startDate, false, timezone) : undefined;
     const normalizedEndDate = endDate ? this.normalizeDate(endDate, true, timezone) : undefined;
-    
+
     // Determine which message types to include (default to user only to reduce data volume)
     const allowedTypes = messageTypes && messageTypes.length > 0 ? messageTypes : ['user'];
-    
+
     // Load history from Claude Code's .jsonl files with pre-filtering
-    let allEntries = await this.loadClaudeHistoryEntries({ 
-      startDate: normalizedStartDate, 
-      endDate: normalizedEndDate 
+    let allEntries = await this.loadClaudeHistoryEntries({
+      startDate: normalizedStartDate,
+      endDate: normalizedEndDate
     });
-    
+
     // Filter by session ID if specified
     if (sessionId) {
       allEntries = allEntries.filter(entry => entry.sessionId === sessionId);
@@ -226,20 +232,20 @@ export class ClaudeCodeHistoryService {
 
     // Filter by date range if specified (additional in-memory filtering for precision)
     if (normalizedStartDate) {
-      allEntries = allEntries.filter(entry => 
+      allEntries = allEntries.filter(entry =>
         entry.timestamp >= normalizedStartDate
       );
     }
 
     if (normalizedEndDate) {
-      allEntries = allEntries.filter(entry => 
+      allEntries = allEntries.filter(entry =>
         entry.timestamp <= normalizedEndDate
       );
     }
 
     // Sort by timestamp (newest first)
     allEntries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    
+
     // Calculate pagination
     const totalCount = allEntries.length;
     const paginatedEntries = allEntries.slice(offset, offset + limit);
@@ -260,18 +266,18 @@ export class ClaudeCodeHistoryService {
 
   async searchConversations(searchQuery: string, options: SearchOptions = {}): Promise<ConversationEntry[]> {
     const { limit = 30, projectPath, startDate, endDate, timezone } = options;
-    
+
     // Normalize date strings for proper comparison
     const normalizedStartDate = startDate ? this.normalizeDate(startDate, false, timezone) : undefined;
     const normalizedEndDate = endDate ? this.normalizeDate(endDate, true, timezone) : undefined;
-    
+
     const allEntries = await this.loadClaudeHistoryEntries({
       startDate: normalizedStartDate,
       endDate: normalizedEndDate
     });
-    
+
     const queryLower = searchQuery.toLowerCase();
-    
+
     let matchedEntries = allEntries.filter(entry =>
       entry.content.toLowerCase().includes(queryLower)
     );
@@ -283,13 +289,13 @@ export class ClaudeCodeHistoryService {
 
     // Filter by date range if specified (additional in-memory filtering for precision)
     if (normalizedStartDate) {
-      matchedEntries = matchedEntries.filter(entry => 
+      matchedEntries = matchedEntries.filter(entry =>
         entry.timestamp >= normalizedStartDate
       );
     }
 
     if (normalizedEndDate) {
-      matchedEntries = matchedEntries.filter(entry => 
+      matchedEntries = matchedEntries.filter(entry =>
         entry.timestamp <= normalizedEndDate
       );
     }
@@ -308,15 +314,15 @@ export class ClaudeCodeHistoryService {
     try {
       const projectsDir = path.join(this.claudeDir, 'projects');
       const projectDirs = await fs.readdir(projectsDir);
-      
+
       for (const projectDir of projectDirs) {
         const projectPath = path.join(projectsDir, projectDir);
         const stats = await fs.stat(projectPath);
-        
+
         if (stats.isDirectory()) {
           const files = await fs.readdir(projectPath);
           const decodedPath = this.decodeProjectPath(projectDir);
-          
+
           if (!projects.has(decodedPath)) {
             projects.set(decodedPath, {
               sessionIds: new Set(),
@@ -324,22 +330,22 @@ export class ClaudeCodeHistoryService {
               lastActivityTime: '1970-01-01T00:00:00.000Z'
             });
           }
-          
+
           const projectInfo = projects.get(decodedPath);
           if (!projectInfo) continue;
-          
+
           for (const file of files) {
             if (file.endsWith('.jsonl')) {
               const sessionId = file.replace('.jsonl', '');
               projectInfo.sessionIds.add(sessionId);
-              
+
               const filePath = path.join(projectPath, file);
               const fileStats = await fs.stat(filePath);
-              
+
               if (fileStats.mtime.toISOString() > projectInfo.lastActivityTime) {
                 projectInfo.lastActivityTime = fileStats.mtime.toISOString();
               }
-              
+
               // Count messages in this session
               const entries = await this.parseJsonlFile(filePath, projectDir);
               projectInfo.messageCount += entries.length;
@@ -361,7 +367,7 @@ export class ClaudeCodeHistoryService {
 
   async listSessions(options: SessionListOptions = {}): Promise<SessionInfo[]> {
     const { projectPath, startDate, endDate, timezone } = options;
-    
+
     // Normalize date strings for proper comparison
     const normalizedStartDate = startDate ? this.normalizeDate(startDate, false, timezone) : undefined;
     const normalizedEndDate = endDate ? this.normalizeDate(endDate, true, timezone) : undefined;
@@ -370,72 +376,79 @@ export class ClaudeCodeHistoryService {
     try {
       const projectsDir = path.join(this.claudeDir, 'projects');
       const projectDirs = await fs.readdir(projectsDir);
-      
+
       for (const projectDir of projectDirs) {
         const decodedPath = this.decodeProjectPath(projectDir);
-        
+
         // Filter by project path if specified
         if (projectPath && decodedPath !== projectPath) {
           continue;
         }
-        
+
         const projectDirPath = path.join(projectsDir, projectDir);
         const stats = await fs.stat(projectDirPath);
-        
+
         if (stats.isDirectory()) {
-          const files = await fs.readdir(projectDirPath);
-          
-          for (const file of files) {
-            if (file.endsWith('.jsonl')) {
-              const sessionId = file.replace('.jsonl', '');
-              const filePath = path.join(projectDirPath, file);
-              const entries = await this.parseJsonlFile(filePath, projectDir);
-              
-              if (entries.length === 0) continue;
-              
-              const sessionStart = entries[entries.length - 1].timestamp;
-              const sessionEnd = entries[0].timestamp;
-              
-              // Filter by date range if specified
-              if (normalizedStartDate && sessionEnd < normalizedStartDate) continue;
-              if (normalizedEndDate && sessionStart > normalizedEndDate) continue;
-              
-              const userMessageCount = entries.filter(e => e.type === 'user').length;
-              const assistantMessageCount = entries.filter(e => e.type === 'assistant').length;
+          // Use fast parser if available
+          if (USE_FAST_PARSER) {
+            const fastSessions = await this.listSessionsFast(projectDirPath, projectDir, normalizedStartDate, normalizedEndDate);
+            sessions.push(...fastSessions);
+          } else {
+            // Fallback to slow parser
+            const files = await fs.readdir(projectDirPath);
 
-              // Calculate duration
-              const startTime = new Date(sessionStart).getTime();
-              const endTime = new Date(sessionEnd).getTime();
-              const durationMs = endTime - startTime;
+            for (const file of files) {
+              if (file.endsWith('.jsonl')) {
+                const sessionId = file.replace('.jsonl', '');
+                const filePath = path.join(projectDirPath, file);
+                const entries = await this.parseJsonlFile(filePath, projectDir);
 
-              // Find first user message for preview
-              const firstUserEntry = entries.slice().reverse().find(e => e.type === 'user');
-              const firstUserMessage = firstUserEntry
-                ? (firstUserEntry.content.length > 100
-                    ? firstUserEntry.content.slice(0, 100) + '...'
-                    : firstUserEntry.content)
-                : undefined;
+                if (entries.length === 0) continue;
 
-              // Check for errors
-              const hasErrors = entries.some(e => e.metadata?.isError === true);
+                const sessionStart = entries[entries.length - 1].timestamp;
+                const sessionEnd = entries[0].timestamp;
 
-              // Extract project name from path
-              const projectName = decodedPath.split('/').pop() || decodedPath;
+                // Filter by date range if specified
+                if (normalizedStartDate && sessionEnd < normalizedStartDate) continue;
+                if (normalizedEndDate && sessionStart > normalizedEndDate) continue;
 
-              sessions.push({
-                sessionId,
-                projectPath: decodedPath,
-                projectName,
-                startTime: sessionStart,
-                endTime: sessionEnd,
-                messageCount: entries.length,
-                userMessageCount,
-                assistantMessageCount,
-                firstUserMessage,
-                durationMs,
-                durationFormatted: this.formatDuration(durationMs),
-                hasErrors
-              });
+                const userMessageCount = entries.filter(e => e.type === 'user').length;
+                const assistantMessageCount = entries.filter(e => e.type === 'assistant').length;
+
+                // Calculate duration
+                const startTime = new Date(sessionStart).getTime();
+                const endTime = new Date(sessionEnd).getTime();
+                const durationMs = endTime - startTime;
+
+                // Find first user message for preview
+                const firstUserEntry = entries.slice().reverse().find(e => e.type === 'user');
+                const firstUserMessage = firstUserEntry
+                  ? (firstUserEntry.content.length > 100
+                      ? firstUserEntry.content.slice(0, 100) + '...'
+                      : firstUserEntry.content)
+                  : undefined;
+
+                // Check for errors
+                const hasErrors = entries.some(e => e.metadata?.isError === true);
+
+                // Extract project name from path
+                const projectName = decodedPath.split('/').pop() || decodedPath;
+
+                sessions.push({
+                  sessionId,
+                  projectPath: decodedPath,
+                  projectName,
+                  startTime: sessionStart,
+                  endTime: sessionEnd,
+                  messageCount: entries.length,
+                  userMessageCount,
+                  assistantMessageCount,
+                  firstUserMessage,
+                  durationMs,
+                  durationFormatted: this.formatDuration(durationMs),
+                  hasErrors
+                });
+              }
             }
           }
         }
@@ -446,6 +459,94 @@ export class ClaudeCodeHistoryService {
 
     // Sort by start time (newest first)
     sessions.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+    return sessions;
+  }
+
+  /**
+   * Fast path: List sessions using the Rust parser
+   * Groups entries by session_id from fast parser results
+   */
+  private async listSessionsFast(
+    projectDirPath: string,
+    projectDir: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<SessionInfo[]> {
+    const sessions: SessionInfo[] = [];
+    const decodedPath = this.decodeProjectPath(projectDir);
+
+    // Use fast parser on the project directory
+    const parsedEntries = parseDirFast(projectDirPath);
+
+    // Group entries by session_id
+    const sessionMap = new Map<string, ParsedEntry[]>();
+
+    for (const entry of parsedEntries) {
+      // Skip entries with empty session_id
+      if (!entry.session_id) continue;
+
+      // Apply date filtering
+      if (startDate && entry.timestamp < startDate) continue;
+      if (endDate && entry.timestamp > endDate) continue;
+
+      if (!sessionMap.has(entry.session_id)) {
+        sessionMap.set(entry.session_id, []);
+      }
+      sessionMap.get(entry.session_id)!.push(entry);
+    }
+
+    // Convert to SessionInfo
+    for (const [sessionId, entries] of sessionMap) {
+      if (entries.length === 0) continue;
+
+      // Sort entries by timestamp
+      entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+      const sessionStart = entries[entries.length - 1].timestamp;
+      const sessionEnd = entries[0].timestamp;
+
+      // Filter by date range
+      if (startDate && sessionEnd < startDate) continue;
+      if (endDate && sessionStart > endDate) continue;
+
+      // Count message types
+      const userEntries = entries.filter(e => e.role?.toLowerCase() === 'user');
+      const assistantEntries = entries.filter(e => e.role?.toLowerCase() === 'assistant');
+      const userMessageCount = userEntries.length;
+      const assistantMessageCount = assistantEntries.length;
+
+      // Calculate duration
+      const startTime = new Date(sessionStart).getTime();
+      const endTime = new Date(sessionEnd).getTime();
+      const durationMs = endTime - startTime;
+
+      // Find first user message for preview
+      const firstUserEntry = userEntries[userEntries.length - 1]; // Last in sorted = earliest
+      const firstUserMessage = firstUserEntry?.content
+        ? (firstUserEntry.content.length > 100
+            ? firstUserEntry.content.slice(0, 100) + '...'
+            : firstUserEntry.content)
+        : undefined;
+
+      // Extract project name from path
+      const projectName = decodedPath.split('/').pop() || decodedPath;
+
+      sessions.push({
+        sessionId,
+        projectPath: decodedPath,
+        projectName,
+        startTime: sessionStart,
+        endTime: sessionEnd,
+        messageCount: entries.length,
+        userMessageCount,
+        assistantMessageCount,
+        firstUserMessage,
+        durationMs,
+        durationFormatted: this.formatDuration(durationMs),
+        hasErrors: false // Would need to scan for errors in fast mode
+      });
+    }
+
     return sessions;
   }
 
@@ -519,27 +620,27 @@ export class ClaudeCodeHistoryService {
   private async loadClaudeHistoryEntries(options: { startDate?: string; endDate?: string } = {}): Promise<ConversationEntry[]> {
     const entries: ConversationEntry[] = [];
     const { startDate, endDate } = options;
-    
+
     try {
       const projectsDir = path.join(this.claudeDir, 'projects');
       const projectDirs = await fs.readdir(projectsDir);
-      
+
       for (const projectDir of projectDirs) {
         const projectPath = path.join(projectsDir, projectDir);
         const stats = await fs.stat(projectPath);
-        
+
         if (stats.isDirectory()) {
           const files = await fs.readdir(projectPath);
-          
+
           for (const file of files) {
             if (file.endsWith('.jsonl')) {
               const filePath = path.join(projectPath, file);
-              
+
               // Pre-filter files based on modification time
               if (await this.shouldSkipFile(filePath, startDate, endDate)) {
                 continue;
               }
-              
+
               const sessionEntries = await this.parseJsonlFile(filePath, projectDir, startDate, endDate);
               entries.push(...sessionEntries);
             }
@@ -549,13 +650,13 @@ export class ClaudeCodeHistoryService {
     } catch (error) {
       console.error('Error loading Claude history:', error);
     }
-    
+
     return entries;
   }
 
   private async parseJsonlFile(filePath: string, projectDir: string, startDate?: string, endDate?: string): Promise<ConversationEntry[]> {
     const entries: ConversationEntry[] = [];
-    
+
     try {
       const fileStream = createReadStream(filePath);
       const rl = createInterface({
@@ -567,7 +668,7 @@ export class ClaudeCodeHistoryService {
         if (line.trim()) {
           try {
             const claudeMessage: ClaudeCodeMessage = JSON.parse(line);
-            
+
             // Apply date filtering at message level for efficiency
             if (startDate && claudeMessage.timestamp < startDate) {
               continue;
@@ -575,7 +676,7 @@ export class ClaudeCodeHistoryService {
             if (endDate && claudeMessage.timestamp > endDate) {
               continue;
             }
-            
+
             const entry = this.convertClaudeMessageToEntry(claudeMessage, projectDir);
             if (entry) {
               entries.push(entry);
@@ -588,14 +689,14 @@ export class ClaudeCodeHistoryService {
     } catch (error) {
       console.error('Error reading file:', filePath, error);
     }
-    
+
     return entries;
   }
 
   private convertClaudeMessageToEntry(claudeMessage: ClaudeCodeMessage, projectDir: string): ConversationEntry | null {
     try {
       let content = '';
-      
+
       if (claudeMessage.message?.content) {
         if (typeof claudeMessage.message.content === 'string') {
           content = claudeMessage.message.content;
@@ -617,7 +718,7 @@ export class ClaudeCodeHistoryService {
       // Add enhanced time information
       const timestamp = claudeMessage.timestamp;
       const messageDate = new Date(timestamp);
-      
+
       return {
         sessionId: claudeMessage.sessionId,
         timestamp,
@@ -625,10 +726,10 @@ export class ClaudeCodeHistoryService {
         content,
         projectPath,
         uuid: claudeMessage.uuid,
-        formattedTime: messageDate.toLocaleString('en-US', { 
+        formattedTime: messageDate.toLocaleString('en-US', {
           timeZone: 'Asia/Tokyo',
           year: 'numeric',
-          month: '2-digit', 
+          month: '2-digit',
           day: '2-digit',
           hour: '2-digit',
           minute: '2-digit',
@@ -704,7 +805,7 @@ export class ClaudeCodeHistoryService {
       const fileStats = await fs.stat(filePath);
       const fileModTime = fileStats.mtime.toISOString();
       const fileCreateTime = fileStats.birthtime.toISOString();
-      
+
       // Get the earliest and latest possible times for file content
       const oldestPossibleTime = fileCreateTime < fileModTime ? fileCreateTime : fileModTime;
       const newestPossibleTime = fileModTime;
