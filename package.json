@@ -1,7 +1,7 @@
 {
   "name": "@ebowwa/claudecodehistory",
-  "version": "1.5.0",
-  "description": "TypeScript library for accessing and analyzing Claude Code conversation history",
+  "version": "1.6.0",
+  "description": "High-performance Claude Code conversation history parser with TypeScript and Rust implementations",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,19 +9,34 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./rust": {
+      "import": "./rust/index.js",
+      "types": "./rust/index.d.ts",
+      "node": "./rust/index.node"
+    },
+    "./typescript": {
+      "import": "./typescript/dist/index.js",
+      "types": "./typescript/dist/index.d.ts"
     }
   },
   "files": [
     "dist/",
-    "example/",
-    "README",
+    "rust/",
+    "typescript/dist/",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
+    "build:rust": "cd rust && npm run build",
+    "build:typescript": "cd typescript && npm run build",
+    "build:all": "npm run build && npm run build:rust && npm run build:typescript",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "bench": "bun run benchmark.ts",
+    "bench:compare": "bun run benchmark-compare.ts",
+    "test": "bun test",
+    "prepublishOnly": "npm run build:all"
   },
   "keywords": [
     "claude-code",
@@ -29,17 +44,20 @@
     "conversation",
     "ai",
     "typescript",
+    "rust",
     "library",
     "analytics",
-    "mcp"
+    "mcp",
+    "high-performance",
+    "napi"
   ],
   "author": "Ebowwa Labs <labs@ebowwa.com>",
   "license": "MIT",
-  "homepage": "https://github.com/ebowwa/codespaces/tree/main/packages/src/claudecode-history#readme",
+  "homepage": "https://github.com/ebowwa/codespaces/tree/main/packages/src/third-party/claudecode/claudecodehistory#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/ebowwa/codespaces.git",
-    "directory": "packages/src/claudecode-history"
+    "directory": "packages/src/third-party/claudecode/claudecodehistory"
   },
   "bugs": {
     "url": "https://github.com/ebowwa/codespaces/issues"
@@ -48,10 +66,14 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@ebowwa/jsonl-hft": "^0.1.2"
+    "@ebowwa/jsonl-hft": "^1.3.1"
+  },
+  "optionalDependencies": {
+    "@ebowwa/claudecodehistory-rs": "1.5.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "bun": "latest"
   }
 }

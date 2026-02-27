@@ -1,0 +1,87 @@
+[package]
+name = "claudecodehistory-rs"
+version = "1.5.1"
+edition = "2021"
+authors = ["Ebowwa Labs <labs@ebowwa.com>"]
+description = "High-performance Rust implementation of Claude Code conversation history parser with native Node.js/Bun bindings"
+license = "MIT"
+repository = "https://github.com/ebowwa/codespaces"
+keywords = ["claude-code", "history", "jsonl", "parser", "mcp"]
+categories = ["parser-implementations", "web-programming"]
+
+[lib]
+name = "claudecodehistory_rs"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "claudecodehistory-cli"
+path = "src/bin/cli.rs"
+required-features = ["cli"]
+
+[features]
+default = []
+napi = ["napi-derive", "napi-sys", "napi-build"]
+cli = ["clap", "env_logger"]
+
+[dependencies]
+# NAPI-RS for Node.js/Bun bindings
+napi-derive = { version = "2", optional = true }
+napi-sys = { version = "2", optional = true }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "fs", "io-util", "sync", "time"] }
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Parallel processing
+rayon = "1.10"
+
+# Memory-mapped file I/O
+memmap2 = "0.9"
+
+# File system traversal
+walkdir = "2.5"
+
+# Home directory detection
+dirs = "5.0"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# System calls (optional, for process detection)
+libc = { version = "0.2", optional = true }
+
+# CLI (optional)
+clap = { version = "4", features = ["derive"], optional = true }
+env_logger = { version = "0.11", optional = true }
+
+# Regex for search
+regex = "1.10"
+
+# SIMD-accelerated JSON parsing (optional, for maximum speed)
+# simd-json = "0.13"
+
+[build-dependencies]
+napi-build = { version = "2", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+opt-level = 3
+strip = "symbols"
+
+[profile.dev]
+opt-level = 1
+
+[package.metadata.napi]
+name = "claudecodehistory"

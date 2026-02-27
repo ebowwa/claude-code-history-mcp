@@ -1,0 +1,76 @@
+{
+  "name": "@ebowwa/claudecodehistory-rs",
+  "version": "1.5.1",
+  "description": "High-performance Rust implementation of Claude Code conversation history parser with native Node.js/Bun bindings",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "types": "./index.d.ts",
+      "bun": "./bun.index.js",
+      "node": "./index.js",
+      "default": "./index.js"
+    }
+  },
+  "scripts": {
+    "build": "cargo build --release && napi build --release --platform --js index.js --dts index.d.ts",
+    "build:debug": "cargo build && napi build --platform",
+    "test": "cargo test",
+    "bench": "cargo bench",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude-code",
+    "history",
+    "jsonl",
+    "parser",
+    "rust",
+    "napi",
+    "bun",
+    "high-performance"
+  ],
+  "author": "Ebowwa Labs <labs@ebowwa.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ebowwa/codespaces.git",
+    "directory": "packages/src/third-party/claudecode/claudecodehistory/rust"
+  },
+  "bugs": {
+    "url": "https://github.com/ebowwa/codespaces/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "napi": {
+    "name": "claudecodehistory",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  },
+  "optionalDependencies": {
+    "@ebowwa/claudecodehistory-rs-darwin-arm64": "1.5.1",
+    "@ebowwa/claudecodehistory-rs-darwin-x64": "1.5.1",
+    "@ebowwa/claudecodehistory-rs-linux-x64-gnu": "1.5.1",
+    "@ebowwa/claudecodehistory-rs-linux-arm64-gnu": "1.5.1",
+    "@ebowwa/claudecodehistory-rs-win32-x64-msvc": "1.5.1"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node",
+    "*.wasm"
+  ]
+}
